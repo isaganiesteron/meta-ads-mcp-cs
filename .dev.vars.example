@@ -1,0 +1,7 @@
+# Meta Ads API Credentials
+# Copy this file to .dev.vars and fill in your actual values
+# .dev.vars is used by Wrangler for local development and is gitignored
+
+META_ACCESS_TOKEN=your_meta_access_token_here
+META_API_VERSION=v19.0
+

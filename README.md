@@ -347,18 +347,48 @@ You'll need a Meta (Facebook) access token with appropriate permissions. The req
 
 ### 5. Set Up Environment Variables
 
-Add your Meta access token as a secret:
+**If you have a `.env` file:**
+
+Run the migration script to copy your credentials to `.dev.vars`:
 
 ```bash
-# Using Wrangler CLI
+# Windows PowerShell
+.\migrate-env.ps1
+
+# Linux/Mac
+chmod +x migrate-env.sh
+./migrate-env.sh
+```
+
+**Or manually create `.dev.vars`:**
+
+1. Copy the example file:
+
+   ```bash
+   cp .dev.vars.example .dev.vars
+   ```
+
+2. Edit `.dev.vars` and add your Meta Ads credentials from your `.env` file:
+   ```
+   META_ACCESS_TOKEN=your_actual_meta_access_token_here
+   META_API_VERSION=v19.0
+   ```
+
+**Note:** Wrangler uses `.dev.vars` for local development (not `.env`). The `.dev.vars` file is gitignored for security.
+
+**For Production Deployment:**
+
+Set secrets using Wrangler CLI:
+
+```bash
+# Set the access token as a secret (encrypted)
 wrangler secret put META_ACCESS_TOKEN
+
+# Optional: Set API version (or use default v19.0)
+wrangler secret put META_API_VERSION
 ```
 
-Or add it to your local `.dev.vars` file for development:
-
-```
-META_ACCESS_TOKEN=your_access_token_here
-```
+📖 **See [SETUP.md](SETUP.md) for detailed setup instructions and troubleshooting.**
 
 ### 6. Customize Configuration
 
@@ -627,19 +657,21 @@ wrangler secret put META_API_VERSION
 # Or in wrangler.jsonc for non-sensitive vars
 {
 	"vars": {
-		"META_API_VERSION": "v18.0",
+		"META_API_VERSION": "v19.0",
 		"ENVIRONMENT": "production"
 	}
 }
 ```
 
 **Local Development:**
-Create a `.dev.vars` file in the project root:
+Create a `.dev.vars` file in the project root (copy from `.dev.vars.example`):
 
 ```
 META_ACCESS_TOKEN=your_access_token_here
-META_API_VERSION=v18.0
+META_API_VERSION=v19.0
 ```
+
+**Note:** If you have a `.env` file, copy your `META_ACCESS_TOKEN` value to `.dev.vars`. Wrangler uses `.dev.vars` for local development, not `.env`.
 
 Access in your code:
 
