@@ -360,6 +360,385 @@ function buildFiltering(filters: Array<{ field: string; operator: string; value:
 
 /**
  * ============================================================================
+ * RESPONSE FORMATTING - Transform raw API responses for human & AI readability
+ * ============================================================================
+ */
+
+// Format currency values (for budgets - Meta API returns in cents)
+function formatCurrency(value: number | string | undefined, currency: string = 'USD'): string {
+	if (value === undefined || value === null) return 'N/A';
+	const num = typeof value === 'string' ? parseFloat(value) : value;
+	if (isNaN(num)) return 'N/A';
+	// Meta API returns budget values in cents (smallest currency unit)
+	return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(num / 100);
+}
+
+// Format currency values for insights (already in currency units, not cents)
+function formatCurrencyInsight(value: number | string | undefined, currency: string = 'USD'): string {
+	if (value === undefined || value === null) return 'N/A';
+	const num = typeof value === 'string' ? parseFloat(value) : value;
+	if (isNaN(num)) return 'N/A';
+	// Meta API returns insight spend values already in currency units
+	return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(num);
+}
+
+// Format numbers with commas
+function formatNumber(value: number | string | undefined): string {
+	if (value === undefined || value === null) return 'N/A';
+	const num = typeof value === 'string' ? parseFloat(value) : value;
+	if (isNaN(num)) return 'N/A';
+	return new Intl.NumberFormat('en-US').format(num);
+}
+
+// Format dates
+function formatDate(dateString: string | undefined): string {
+	if (!dateString) return 'N/A';
+	try {
+		const date = new Date(dateString);
+		return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+	} catch {
+		return dateString;
+	}
+}
+
+// Format percentage
+function formatPercent(value: number | string | undefined): string {
+	if (value === undefined || value === null) return 'N/A';
+	const num = typeof value === 'string' ? parseFloat(value) : value;
+	if (isNaN(num)) return 'N/A';
+	return `${num.toFixed(2)}%`;
+}
+
+// Format account data
+function formatAccountData(data: any): string {
+	if (Array.isArray(data?.data)) {
+		const accounts = data.data;
+		const summary = `Found ${accounts.length} ad account(s)\n\n`;
+		const formatted = accounts
+			.map((acc: any, idx: number) => {
+				const status = acc.account_status || 'UNKNOWN';
+				const statusEmoji = status === 1 ? '✅' : status === 2 ? '⚠️' : status === 3 ? '❌' : '❓';
+				return `${idx + 1}. ${acc.name || 'Unnamed Account'} (${acc.id})
+   Status: ${statusEmoji} ${getAccountStatusText(status)}
+   Currency: ${acc.currency || 'N/A'}
+   Timezone: ${acc.timezone_name || 'N/A'}
+   Account ID: ${acc.id}`;
+			})
+			.join('\n\n');
+		return summary + formatted;
+	} else if (data?.id) {
+		// Single account
+		const acc = data;
+		const status = acc.account_status || 'UNKNOWN';
+		const statusEmoji = status === 1 ? '✅' : status === 2 ? '⚠️' : status === 3 ? '❌' : '❓';
+		return `Ad Account: ${acc.name || 'Unnamed Account'}
+Account ID: ${acc.id}
+Status: ${statusEmoji} ${getAccountStatusText(status)}
+Currency: ${acc.currency || 'N/A'}
+Timezone: ${acc.timezone_name || 'N/A'}
+${acc.business_name ? `Business: ${acc.business_name}\n` : ''}${acc.account_id ? `Numeric ID: ${acc.account_id}\n` : ''}`;
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+function getAccountStatusText(status: number): string {
+	const statusMap: Record<number, string> = {
+		1: 'ACTIVE',
+		2: 'DISABLED',
+		3: 'UNSETTLED',
+		7: 'PENDING_RISK_REVIEW',
+		8: 'IN_GRACE_PERIOD',
+		9: 'PENDING_CLOSURE',
+		100: 'PENDING_SETTLEMENT',
+		101: 'INACTIVE',
+	};
+	return statusMap[status] || `STATUS_${status}`;
+}
+
+// Format campaign data
+function formatCampaignData(data: any): string {
+	if (Array.isArray(data?.data)) {
+		const campaigns = data.data;
+		const summary = `Found ${campaigns.length} campaign(s)\n\n`;
+		const formatted = campaigns
+			.map((camp: any, idx: number) => {
+				const status = camp.status || 'UNKNOWN';
+				const statusEmoji = status === 'ACTIVE' ? '🟢' : status === 'PAUSED' ? '⏸️' : status === 'ARCHIVED' ? '📦' : '❓';
+				return `${idx + 1}. ${camp.name || 'Unnamed Campaign'} (${camp.id})
+   Status: ${statusEmoji} ${status}
+   Objective: ${camp.objective || 'N/A'}
+   Created: ${formatDate(camp.created_time)}
+   ${camp.daily_budget ? `Daily Budget: ${formatCurrency(camp.daily_budget, camp.currency || 'USD')}\n   ` : ''}${
+					camp.lifetime_budget ? `Lifetime Budget: ${formatCurrency(camp.lifetime_budget, camp.currency || 'USD')}\n   ` : ''
+				}Campaign ID: ${camp.id}`;
+			})
+			.join('\n\n');
+		return summary + formatted;
+	} else if (data?.id) {
+		// Single campaign
+		const camp = data;
+		const status = camp.status || 'UNKNOWN';
+		const statusEmoji = status === 'ACTIVE' ? '🟢' : status === 'PAUSED' ? '⏸️' : status === 'ARCHIVED' ? '📦' : '❓';
+		return `Campaign: ${camp.name || 'Unnamed Campaign'}
+Campaign ID: ${camp.id}
+Status: ${statusEmoji} ${status}
+Objective: ${camp.objective || 'N/A'}
+Created: ${formatDate(camp.created_time)}
+Updated: ${formatDate(camp.updated_time)}
+${camp.start_time ? `Start: ${formatDate(camp.start_time)}\n` : ''}${camp.stop_time ? `End: ${formatDate(camp.stop_time)}\n` : ''}${
+			camp.daily_budget ? `Daily Budget: ${formatCurrency(camp.daily_budget, camp.currency || 'USD')}\n` : ''
+		}${camp.lifetime_budget ? `Lifetime Budget: ${formatCurrency(camp.lifetime_budget, camp.currency || 'USD')}\n` : ''}`;
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+// Format ad set data
+function formatAdSetData(data: any): string {
+	if (Array.isArray(data?.data)) {
+		const adsets = data.data;
+		const summary = `Found ${adsets.length} ad set(s)\n\n`;
+		const formatted = adsets
+			.map((adset: any, idx: number) => {
+				const status = adset.status || 'UNKNOWN';
+				const statusEmoji = status === 'ACTIVE' ? '🟢' : status === 'PAUSED' ? '⏸️' : status === 'ARCHIVED' ? '📦' : '❓';
+				return `${idx + 1}. ${adset.name || 'Unnamed Ad Set'} (${adset.id})
+   Status: ${statusEmoji} ${status}
+   Campaign ID: ${adset.campaign_id || 'N/A'}
+   ${adset.daily_budget ? `Daily Budget: ${formatCurrency(adset.daily_budget)}\n   ` : ''}${
+					adset.lifetime_budget ? `Lifetime Budget: ${formatCurrency(adset.lifetime_budget)}\n   ` : ''
+				}Optimization Goal: ${adset.optimization_goal || 'N/A'}
+   Billing Event: ${adset.billing_event || 'N/A'}
+   Created: ${formatDate(adset.created_time)}
+   Ad Set ID: ${adset.id}`;
+			})
+			.join('\n\n');
+		return summary + formatted;
+	} else if (data?.id) {
+		// Single ad set
+		const adset = data;
+		const status = adset.status || 'UNKNOWN';
+		const statusEmoji = status === 'ACTIVE' ? '🟢' : status === 'PAUSED' ? '⏸️' : status === 'ARCHIVED' ? '📦' : '❓';
+		return `Ad Set: ${adset.name || 'Unnamed Ad Set'}
+Ad Set ID: ${adset.id}
+Status: ${statusEmoji} ${status}
+Campaign ID: ${adset.campaign_id || 'N/A'}
+Created: ${formatDate(adset.created_time)}
+Updated: ${formatDate(adset.updated_time)}
+${adset.daily_budget ? `Daily Budget: ${formatCurrency(adset.daily_budget)}\n` : ''}${
+			adset.lifetime_budget ? `Lifetime Budget: ${formatCurrency(adset.lifetime_budget)}\n` : ''
+		}Optimization Goal: ${adset.optimization_goal || 'N/A'}
+Billing Event: ${adset.billing_event || 'N/A'}
+${adset.bid_amount ? `Bid Amount: ${formatCurrency(adset.bid_amount)}\n` : ''}`;
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+// Format ad data
+function formatAdData(data: any): string {
+	if (Array.isArray(data?.data)) {
+		const ads = data.data;
+		const summary = `Found ${ads.length} ad(s)\n\n`;
+		const formatted = ads
+			.map((ad: any, idx: number) => {
+				const status = ad.status || 'UNKNOWN';
+				const effectiveStatus = ad.effective_status || 'UNKNOWN';
+				const statusEmoji = status === 'ACTIVE' ? '🟢' : status === 'PAUSED' ? '⏸️' : status === 'ARCHIVED' ? '📦' : '❓';
+				const creative = ad.creative || {};
+				return `${idx + 1}. ${ad.name || 'Unnamed Ad'} (${ad.id})
+   Status: ${statusEmoji} ${status} (Effective: ${effectiveStatus})
+   Ad Set ID: ${ad.adset_id || 'N/A'}
+   ${creative.id ? `Creative ID: ${creative.id}\n   ` : ''}${creative.title ? `Title: ${creative.title}\n   ` : ''}${
+					creative.body ? `Body: ${creative.body.substring(0, 100)}${creative.body.length > 100 ? '...' : ''}\n   ` : ''
+				}Created: ${formatDate(ad.created_time)}
+   Ad ID: ${ad.id}`;
+			})
+			.join('\n\n');
+		return summary + formatted;
+	} else if (data?.id) {
+		// Single ad
+		const ad = data;
+		const status = ad.status || 'UNKNOWN';
+		const effectiveStatus = ad.effective_status || 'UNKNOWN';
+		const statusEmoji = status === 'ACTIVE' ? '🟢' : status === 'PAUSED' ? '⏸️' : status === 'ARCHIVED' ? '📦' : '❓';
+		const creative = ad.creative || {};
+		return `Ad: ${ad.name || 'Unnamed Ad'}
+Ad ID: ${ad.id}
+Status: ${statusEmoji} ${status}
+Effective Status: ${effectiveStatus}
+Ad Set ID: ${ad.adset_id || 'N/A'}
+Created: ${formatDate(ad.created_time)}
+Updated: ${formatDate(ad.updated_time)}
+${creative.id ? `Creative ID: ${creative.id}\n` : ''}${creative.title ? `Creative Title: ${creative.title}\n` : ''}${
+			creative.body ? `Creative Body: ${creative.body}\n` : ''
+		}${creative.image_url ? `Image URL: ${creative.image_url}\n` : ''}${creative.video_id ? `Video ID: ${creative.video_id}\n` : ''}`;
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+// Format creative data
+function formatCreativeData(data: any): string {
+	// Handle case where creative is nested in ad response
+	if (data?.creative) {
+		const creative = data.creative;
+		return `Creative for Ad: ${data.id || 'N/A'}
+Creative ID: ${creative.id || 'N/A'}
+${creative.title ? `Title: ${creative.title}\n` : ''}${creative.body ? `Body: ${creative.body}\n` : ''}${
+			creative.image_url ? `Image URL: ${creative.image_url}\n` : ''
+		}${creative.thumbnail_url ? `Thumbnail URL: ${creative.thumbnail_url}\n` : ''}${
+			creative.video_id ? `Video ID: ${creative.video_id}\n` : ''
+		}${creative.object_story_spec ? `Story Spec: ${JSON.stringify(creative.object_story_spec, null, 2)}\n` : ''}`;
+	} else if (data?.id) {
+		// Direct creative response
+		const creative = data;
+		return `Creative: ${creative.id}
+Creative ID: ${creative.id}
+${creative.title ? `Title: ${creative.title}\n` : ''}${creative.body ? `Body: ${creative.body}\n` : ''}${
+			creative.image_url ? `Image URL: ${creative.image_url}\n` : ''
+		}${creative.thumbnail_url ? `Thumbnail URL: ${creative.thumbnail_url}\n` : ''}${
+			creative.video_id ? `Video ID: ${creative.video_id}\n` : ''
+		}${creative.object_story_spec ? `Story Spec: ${JSON.stringify(creative.object_story_spec, null, 2)}\n` : ''}`;
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+// Format insights data
+function formatInsightsData(data: any): string {
+	if (Array.isArray(data?.data)) {
+		const insights = data.data;
+		if (insights.length === 0) {
+			return 'No insights data available for the specified time range.';
+		}
+
+		const summary = `Performance Insights (${insights.length} record(s))\n\n`;
+		const formatted = insights
+			.map((insight: any, idx: number) => {
+				const dateRange =
+					insight.date_start && insight.date_stop ? `${formatDate(insight.date_start)} - ${formatDate(insight.date_stop)}` : 'N/A';
+
+				return `Period ${idx + 1}: ${dateRange}
+   Spend: ${formatCurrencyInsight(insight.spend)}
+   Impressions: ${formatNumber(insight.impressions)}
+   Clicks: ${formatNumber(insight.clicks)}
+   Reach: ${formatNumber(insight.reach)}
+   ${insight.ctr ? `CTR: ${formatPercent(insight.ctr)}\n   ` : ''}${insight.cpm ? `CPM: ${formatCurrencyInsight(insight.cpm)}\n   ` : ''}${
+					insight.cpp ? `CPP: ${formatCurrencyInsight(insight.cpp)}\n   ` : ''
+				}${insight.frequency ? `Frequency: ${insight.frequency}\n   ` : ''}${
+					insight.actions ? `Actions: ${JSON.stringify(insight.actions)}\n   ` : ''
+				}${insight.cost_per_action_type ? `Cost per Action: ${JSON.stringify(insight.cost_per_action_type)}\n   ` : ''}`;
+			})
+			.join('\n\n');
+
+		// Add summary totals if available
+		if (insights.length > 1) {
+			const totals = insights.reduce((acc: any, insight: any) => {
+				acc.spend = (acc.spend || 0) + parseFloat(insight.spend || '0'); // Already in currency units
+				acc.impressions = (acc.impressions || 0) + parseFloat(insight.impressions || '0');
+				acc.clicks = (acc.clicks || 0) + parseFloat(insight.clicks || '0');
+				acc.reach = (acc.reach || 0) + parseFloat(insight.reach || '0');
+				return acc;
+			}, {});
+
+			const avgCTR = totals.clicks && totals.impressions ? ((totals.clicks / totals.impressions) * 100).toFixed(2) + '%' : 'N/A';
+			const avgCPM = totals.spend && totals.impressions ? formatCurrencyInsight((totals.spend / totals.impressions) * 1000) : 'N/A';
+
+			return (
+				summary +
+				formatted +
+				`\n\n--- Summary Totals ---
+Total Spend: ${formatCurrencyInsight(totals.spend)}
+Total Impressions: ${formatNumber(totals.impressions)}
+Total Clicks: ${formatNumber(totals.clicks)}
+Total Reach: ${formatNumber(totals.reach)}
+Average CTR: ${avgCTR}
+Average CPM: ${avgCPM}`
+			);
+		}
+
+		return summary + formatted;
+	} else if (data?.data && !Array.isArray(data.data)) {
+		// Single insight record
+		const insight = data.data;
+		const dateRange =
+			insight.date_start && insight.date_stop ? `${formatDate(insight.date_start)} - ${formatDate(insight.date_stop)}` : 'N/A';
+
+		return `Performance Insights
+Period: ${dateRange}
+Spend: ${formatCurrencyInsight(insight.spend)}
+Impressions: ${formatNumber(insight.impressions)}
+Clicks: ${formatNumber(insight.clicks)}
+Reach: ${formatNumber(insight.reach)}
+${insight.ctr ? `CTR: ${formatPercent(insight.ctr)}\n` : ''}${insight.cpm ? `CPM: ${formatCurrencyInsight(insight.cpm)}\n` : ''}${
+			insight.cpp ? `CPP: ${formatCurrencyInsight(insight.cpp)}\n` : ''
+		}${insight.frequency ? `Frequency: ${insight.frequency}\n` : ''}${
+			insight.actions ? `Actions:\n${JSON.stringify(insight.actions, null, 2)}\n` : ''
+		}${insight.cost_per_action_type ? `Cost per Action:\n${JSON.stringify(insight.cost_per_action_type, null, 2)}\n` : ''}`;
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+// Format token validation data
+function formatTokenValidationData(data: any): string {
+	if (data?.data) {
+		const tokenData = data.data;
+		const isValid = tokenData.is_valid === true;
+		const appId = tokenData.app_id || 'N/A';
+		const userId = tokenData.user_id || 'N/A';
+		const expiresAt = tokenData.expires_at ? formatDate(new Date(tokenData.expires_at * 1000).toISOString()) : 'Never';
+
+		return `Token Validation: ${isValid ? '✅ Valid' : '❌ Invalid'}
+App ID: ${appId}
+User ID: ${userId}
+Expires: ${expiresAt}
+${tokenData.scopes ? `Scopes: ${tokenData.scopes.join(', ')}\n` : ''}${tokenData.type ? `Type: ${tokenData.type}\n` : ''}`;
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+// Format health check data
+function formatHealthCheckData(data: any): string {
+	const server = data.server || {};
+	const metaApi = data.meta_api || {};
+
+	return `Health Check Results
+
+Server Status: ${server.status === 'running' ? '✅ Running' : '❌ Not Running'}
+Server Name: ${server.name || 'N/A'}
+Server Version: ${server.version || 'N/A'}
+
+Meta API Connection: ${metaApi.connected ? '✅ Connected' : '❌ Not Connected'}
+Token Configured: ${metaApi.token_configured ? '✅ Yes' : '❌ No'}
+Token Valid: ${metaApi.token_valid ? '✅ Yes' : '❌ No'}
+API Version: ${metaApi.api_version || 'N/A'}
+${metaApi.error ? `Error: ${metaApi.error}\n` : ''}`;
+}
+
+// Main formatter that routes to appropriate formatter
+function formatResponse(data: any, toolName: string): string {
+	// Determine which formatter to use based on tool name
+	if (toolName.includes('account')) {
+		return formatAccountData(data);
+	} else if (toolName.includes('campaign')) {
+		return formatCampaignData(data);
+	} else if (toolName.includes('adset')) {
+		return formatAdSetData(data);
+	} else if (toolName.includes('ad') && !toolName.includes('creative')) {
+		return formatAdData(data);
+	} else if (toolName.includes('creative')) {
+		return formatCreativeData(data);
+	} else if (toolName.includes('insight')) {
+		return formatInsightsData(data);
+	} else if (toolName.includes('validate_token')) {
+		return formatTokenValidationData(data);
+	} else if (toolName.includes('health_check')) {
+		return formatHealthCheckData(data);
+	}
+
+	// Fallback to formatted JSON
+	return JSON.stringify(data, null, 2);
+}
+
+/**
+ * ============================================================================
  * TOOL DEFINITIONS - Meta Ads MCP Tools
  * ============================================================================
  */
@@ -387,7 +766,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_ad_accounts'),
 					},
 				],
 			};
@@ -427,7 +806,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_account_info'),
 					},
 				],
 			};
@@ -456,7 +835,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_validate_token'),
 					},
 				],
 			};
@@ -510,7 +889,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_campaigns'),
 					},
 				],
 			};
@@ -546,7 +925,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_campaign_details'),
 					},
 				],
 			};
@@ -601,7 +980,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_adsets'),
 					},
 				],
 			};
@@ -637,7 +1016,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_adset_details'),
 					},
 				],
 			};
@@ -698,7 +1077,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_ads'),
 					},
 				],
 			};
@@ -734,7 +1113,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_ad_details'),
 					},
 				],
 			};
@@ -771,7 +1150,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_ad_creatives'),
 					},
 				],
 			};
@@ -807,7 +1186,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_creative_details'),
 					},
 				],
 			};
@@ -894,7 +1273,7 @@ const TOOLS: Tool[] = [
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(data, null, 2),
+						text: formatResponse(data, 'mcp_meta_ads_get_insights'),
 					},
 				],
 			};
@@ -927,28 +1306,26 @@ const TOOLS: Tool[] = [
 				}
 			}
 
+			const healthData = {
+				server: {
+					name: CONFIG.serverName,
+					version: CONFIG.serverVersion,
+					status: 'running',
+				},
+				meta_api: {
+					connected: apiConnected,
+					token_configured: hasToken,
+					token_valid: tokenValid,
+					api_version: env.META_API_VERSION || CONFIG.metaApiVersion,
+					error: error,
+				},
+			};
+
 			return {
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(
-							{
-								server: {
-									name: CONFIG.serverName,
-									version: CONFIG.serverVersion,
-									status: 'running',
-								},
-								meta_api: {
-									connected: apiConnected,
-									token_configured: hasToken,
-									token_valid: tokenValid,
-									api_version: env.META_API_VERSION || CONFIG.metaApiVersion,
-									error: error,
-								},
-							},
-							null,
-							2
-						),
+						text: formatResponse(healthData, 'mcp_meta_ads_health_check'),
 					},
 				],
 			};
