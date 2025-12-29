@@ -715,17 +715,46 @@ ${metaApi.error ? `Error: ${metaApi.error}\n` : ''}`;
 // Format error messages in a human-readable way
 function formatError(error: unknown, context?: string): string {
 	let errorMessage = 'An unexpected error occurred';
-	let errorDetails = '';
 
 	if (error instanceof Error) {
-		errorMessage = error.message;
+		errorMessage = error.message || 'An unknown error occurred';
 
 		// Parse Meta API errors for better formatting
 		if (error.message.includes('Meta API error')) {
-			// Extract error details from format: "Meta API error (CODE): MESSAGE | Type: TYPE | Endpoint: ENDPOINT"
-			const match = error.message.match(/Meta API error \((\d+)\): (.+?) \| Type: (.+?) \| Endpoint: (.+)/);
-			if (match) {
-				const [, code, message, type, endpoint] = match;
+			// Try to extract error details from format: "Meta API error (CODE): MESSAGE | Type: TYPE | Endpoint: ENDPOINT"
+			// Use a more flexible approach that handles multi-line messages and special characters
+			const codeMatch = error.message.match(/Meta API error \((\d+)\)/);
+			if (codeMatch) {
+				const code = codeMatch[1];
+
+				// Extract message (everything after the code until "| Type:" or end of string)
+				let message = '';
+				let type = 'Unknown';
+				let endpoint = 'Unknown';
+
+				const messageMatch = error.message.match(/Meta API error \(\d+\): (.+?)(?:\s+\|\s+Type:|$)/s);
+				if (messageMatch) {
+					message = messageMatch[1].trim();
+				}
+
+				const typeMatch = error.message.match(/\|\s+Type:\s+(.+?)(?:\s+\|\s+Endpoint:|$)/s);
+				if (typeMatch) {
+					type = typeMatch[1].trim();
+				}
+
+				const endpointMatch = error.message.match(/\|\s+Endpoint:\s+(.+)$/s);
+				if (endpointMatch) {
+					endpoint = endpointMatch[1].trim();
+				}
+
+				// If we couldn't extract message, use the full error message
+				if (!message) {
+					message = error.message
+						.replace(/^Meta API error \(\d+\):\s*/, '')
+						.split('|')[0]
+						.trim();
+				}
+
 				return `❌ Meta Ads API Error
 
 Error Code: ${code}
@@ -736,12 +765,23 @@ Endpoint: ${endpoint}
 ${context ? `Context: ${context}\n` : ''}Please check:
 - Your access token is valid and has the required permissions
 - The account ID or resource ID is correct
-- The API endpoint and parameters are valid`;
+- The API endpoint and parameters are valid
+- You have the necessary permissions for this operation`;
 			}
+
+			// Fallback: if we can't parse the format, still format it nicely
+			return `❌ Meta Ads API Error
+
+${errorMessage}
+
+${context ? `Context: ${context}\n` : ''}Please check:
+- Your access token is valid and has the required permissions
+- The account ID or resource ID is correct
+- The API endpoint and parameters are valid`;
 		}
 
 		// Handle timeout errors
-		if (error.message.includes('timeout')) {
+		if (error.message.includes('timeout') || error.message.includes('Timeout') || error.name === 'AbortError') {
 			return `⏱️ Request Timeout
 
 ${error.message}
@@ -755,7 +795,7 @@ Please try again later.`;
 		}
 
 		// Handle configuration errors
-		if (error.message.includes('META_ACCESS_TOKEN')) {
+		if (error.message.includes('META_ACCESS_TOKEN') || error.message.includes('not configured') || error.message.includes('not set')) {
 			return `🔑 Configuration Error
 
 ${error.message}
@@ -767,7 +807,7 @@ ${context ? `Context: ${context}\n` : ''}Please ensure:
 		}
 
 		// Handle pagination errors
-		if (error.message.includes('pagination') || error.message.includes('Paginated request')) {
+		if (error.message.includes('pagination') || error.message.includes('Paginated request') || error.message.includes('Pagination')) {
 			return `📄 Pagination Error
 
 ${error.message}
@@ -779,9 +819,113 @@ ${context ? `Context: ${context}\n` : ''}There was an issue fetching paginated d
 
 Please try again or reduce the number of pages requested.`;
 		}
+
+		// Handle network/fetch errors
+		if (
+			error.message.includes('fetch') ||
+			error.message.includes('network') ||
+			error.message.includes('Network') ||
+			error.message.includes('Failed to fetch')
+		) {
+			return `🌐 Network Error
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}There was a network connectivity issue. This could be due to:
+- Internet connection problems
+- Meta API being temporarily unavailable
+- Firewall or proxy blocking the request
+
+Please check your network connection and try again.`;
+		}
+
+		// Handle JSON parsing errors
+		if (error.message.includes('JSON') || error.message.includes('parse') || error.message.includes('Invalid JSON')) {
+			return `📋 Data Format Error
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}There was an issue parsing the response data. This could be due to:
+- Unexpected response format from Meta API
+- Corrupted data transmission
+- API version incompatibility
+
+Please try again or contact support if the issue persists.`;
+		}
+
+		// Handle rate limiting errors (if not already caught as Meta API error)
+		if (error.message.includes('rate limit') || error.message.includes('Rate limit') || error.message.includes('429')) {
+			return `⏳ Rate Limit Exceeded
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}You have exceeded the API rate limit. This could be due to:
+- Too many requests in a short time period
+- Multiple concurrent requests
+- App-level rate limits
+
+Please wait a few moments before trying again.`;
+		}
+
+		// Handle permission/authorization errors
+		if (
+			error.message.includes('permission') ||
+			error.message.includes('Permission') ||
+			error.message.includes('unauthorized') ||
+			error.message.includes('Unauthorized') ||
+			error.message.includes('403') ||
+			error.message.includes('401')
+		) {
+			return `🔒 Permission Error
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}You don't have permission to perform this operation. Please check:
+- Your access token has the required scopes
+- You have access to the requested resource
+- Your account has the necessary permissions`;
+		}
+
+		// Handle not found errors
+		if (
+			error.message.includes('not found') ||
+			error.message.includes('Not Found') ||
+			error.message.includes('does not exist') ||
+			error.message.includes('404')
+		) {
+			return `🔍 Resource Not Found
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}The requested resource could not be found. Please check:
+- The resource ID is correct
+- The resource exists and is accessible
+- You have permission to access this resource`;
+		}
 	}
 
-	// Generic error formatting
+	// Handle non-Error objects (strings, numbers, objects, etc.)
+	if (typeof error === 'string') {
+		errorMessage = error;
+	} else if (typeof error === 'number') {
+		errorMessage = `Error code: ${error}`;
+	} else if (error && typeof error === 'object') {
+		// Try to extract a message from the object
+		if ('message' in error && typeof error.message === 'string') {
+			errorMessage = error.message;
+		} else if ('error' in error && typeof error.error === 'string') {
+			errorMessage = error.error;
+		} else {
+			errorMessage = JSON.stringify(error);
+		}
+	}
+
+	// Generic error formatting - always return human-readable format
+	// Ensure errorMessage is never empty
+	if (!errorMessage || errorMessage.trim() === '') {
+		errorMessage = 'An unexpected error occurred';
+	}
+
 	return `❌ Error
 
 ${errorMessage}
@@ -789,7 +933,8 @@ ${errorMessage}
 ${context ? `Context: ${context}\n` : ''}If this error persists, please check:
 - Your network connection
 - Meta API status
-- Your configuration settings`;
+- Your configuration settings
+- The error message above for specific details`;
 }
 
 // Main formatter that routes to appropriate formatter
@@ -1611,22 +1756,35 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 				} catch (toolError: unknown) {
 					// Format error in human-readable way
 					const formattedError = formatError(toolError, `Tool: ${name}`);
+					// Return error in result format with content field for client compatibility
+					// This ensures clients can always access result.content
 					response = {
 						jsonrpc: '2.0',
 						id: message.id,
-						error: {
-							code: -32603,
-							message: formattedError,
+						result: {
+							content: [
+								{
+									type: 'text',
+									text: formattedError,
+								},
+							],
+							isError: true,
 						},
 					};
 				}
 			} else {
+				const formattedError = formatError(new Error(`Unknown tool: ${name}`), 'Tool lookup');
 				response = {
 					jsonrpc: '2.0',
 					id: message.id,
-					error: {
-						code: -32601,
-						message: formatError(new Error(`Unknown tool: ${name}`), 'Tool lookup'),
+					result: {
+						content: [
+							{
+								type: 'text',
+								text: formattedError,
+							},
+						],
+						isError: true,
 					},
 				};
 			}
