@@ -12,7 +12,13 @@ const CONFIG = {
 	protocolVersion: '2024-11-05',
 	keepAliveInterval: 30000, // 30 seconds
 	metaApiVersion: 'v19.0', // Meta Marketing API version (matches main codebase)
-	rateLimitDelay: 5, // 5ms delay between requests (200 requests/second conservative limit)
+	rateLimitDelay: 5, // Minimum delay between requests (5ms for burst protection)
+	// Meta API Rate Limits (per hour):
+	// - Ad Account Level: 4800 calls/hour per ad account
+	// - App Level: 200 calls/hour per user per app (MOST RESTRICTIVE)
+	// We track hourly usage and enforce the app-level limit
+	appLevelRateLimit: 200, // Calls per hour (most restrictive limit)
+	accountLevelRateLimit: 4800, // Calls per hour per account
 	maxRetries: 3, // Maximum retry attempts
 	requestTimeout: 30000, // 30 seconds timeout
 } as const;
@@ -57,17 +63,65 @@ interface ToolResult {
  * ============================================================================
  */
 
-// Rate limiting: Track last request time to enforce 200 requests/second limit
-let lastRequestTime = 0;
+// Rate limiting: Track requests per hour to respect Meta API limits
+interface RateLimitTracker {
+	requests: number[];
+	lastRequestTime: number;
+}
 
-// Enforce rate limiting (200 requests/second = 5ms between requests)
-async function enforceRateLimit(): Promise<void> {
+// Track requests in sliding window (last hour)
+const rateLimitTracker: RateLimitTracker = {
+	requests: [], // Timestamps of requests in the last hour
+	lastRequestTime: 0,
+};
+
+// Calculate minimum delay needed to stay within rate limits
+function calculateRequiredDelay(): number {
 	const now = Date.now();
-	const timeSinceLastRequest = now - lastRequestTime;
-	if (timeSinceLastRequest < CONFIG.rateLimitDelay) {
-		await delay(CONFIG.rateLimitDelay - timeSinceLastRequest);
+	const oneHourAgo = now - 3600000; // 1 hour in milliseconds
+
+	// Remove requests older than 1 hour
+	rateLimitTracker.requests = rateLimitTracker.requests.filter((timestamp) => timestamp > oneHourAgo);
+
+	const requestsInLastHour = rateLimitTracker.requests.length;
+	const appLevelLimit = CONFIG.appLevelRateLimit; // 200/hour
+
+	// If we're at or over the limit, calculate when we can make the next request
+	if (requestsInLastHour >= appLevelLimit) {
+		// Find the oldest request that's still within the hour
+		const oldestRequest = rateLimitTracker.requests[0];
+		if (oldestRequest) {
+			const timeUntilOldestExpires = oldestRequest + 3600000 - now;
+			return Math.max(timeUntilOldestExpires, CONFIG.rateLimitDelay);
+		}
 	}
-	lastRequestTime = Date.now();
+
+	// Minimum delay between requests (burst protection)
+	const timeSinceLastRequest = now - rateLimitTracker.lastRequestTime;
+	if (timeSinceLastRequest < CONFIG.rateLimitDelay) {
+		return CONFIG.rateLimitDelay - timeSinceLastRequest;
+	}
+
+	return 0; // No delay needed
+}
+
+// Enforce rate limiting based on Meta API limits
+async function enforceRateLimit(): Promise<void> {
+	const requiredDelay = calculateRequiredDelay();
+	if (requiredDelay > 0) {
+		await delay(requiredDelay);
+	}
+
+	// Record this request
+	const now = Date.now();
+	rateLimitTracker.requests.push(now);
+	rateLimitTracker.lastRequestTime = now;
+
+	// Log warning if approaching limit
+	const requestsInLastHour = rateLimitTracker.requests.length;
+	if (requestsInLastHour >= CONFIG.appLevelRateLimit * 0.9) {
+		console.warn(`⚠️ Approaching rate limit: ${requestsInLastHour}/${CONFIG.appLevelRateLimit} requests in last hour`);
+	}
 }
 
 // Delay helper for retries
@@ -103,13 +157,70 @@ function logError(error: Response, endpoint: string, errorData?: any): void {
 	});
 }
 
-// Main API request function with retry logic (matching main codebase pattern)
+// Helper to fetch a paginated URL (next URL already includes access token)
+async function fetchPaginatedUrl(nextUrl: string, retryCount = 0): Promise<{ data: unknown; paging?: { next?: string } }> {
+	try {
+		// Enforce rate limiting
+		await enforceRateLimit();
+
+		// Create AbortController for timeout
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
+
+		const response = await fetch(nextUrl, {
+			method: 'GET',
+			signal: controller.signal,
+		});
+
+		clearTimeout(timeoutId);
+
+		if (!response.ok) {
+			const errorData = (await response.json().catch(() => ({ error: { message: 'Unknown error' } }))) as {
+				error?: { message?: string; code?: number; type?: string };
+			};
+
+			// Check if this is a retryable error
+			if (isRetryableError(response) && retryCount < CONFIG.maxRetries) {
+				const backoffDelay = Math.pow(2, retryCount) * 1000;
+				console.warn(`⚠️ Paginated request failed, retrying in ${backoffDelay}ms`);
+				await delay(backoffDelay);
+				return fetchPaginatedUrl(nextUrl, retryCount + 1);
+			}
+
+			logError(response, nextUrl, errorData);
+			throw createDetailedError(response, nextUrl, errorData);
+		}
+
+		return response.json();
+	} catch (error: unknown) {
+		// Handle abort (timeout) as retryable
+		if (error instanceof Error && error.name === 'AbortError') {
+			if (retryCount < CONFIG.maxRetries) {
+				const backoffDelay = Math.pow(2, retryCount) * 1000;
+				console.warn(`⚠️ Paginated request timeout, retrying in ${backoffDelay}ms`);
+				await delay(backoffDelay);
+				return fetchPaginatedUrl(nextUrl, retryCount + 1);
+			}
+			throw new Error(`Request timeout after ${CONFIG.maxRetries + 1} attempts: ${nextUrl}`);
+		}
+
+		if (error instanceof Error && error.message.includes('Meta API error')) {
+			throw error;
+		}
+
+		throw new Error(`Paginated request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+	}
+}
+
+// Main API request function with retry logic and automatic pagination (matching main codebase pattern)
 async function callMetaAPI(
 	endpoint: string,
 	params: Record<string, string | number | undefined> = {},
 	method: 'GET' | 'POST' | 'DELETE' = 'GET',
 	retryCount = 0,
-	env: Env
+	env: Env,
+	enablePagination = true,
+	maxPages = 1000
 ): Promise<unknown> {
 	const accessToken = env.META_ACCESS_TOKEN;
 	if (!accessToken) {
@@ -158,7 +269,7 @@ async function callMetaAPI(
 				console.warn(`Error: ${errorData?.error?.message || 'Unknown error'}`);
 
 				await delay(backoffDelay);
-				return callMetaAPI(endpoint, params, method, retryCount + 1, env);
+				return callMetaAPI(endpoint, params, method, retryCount + 1, env, enablePagination, maxPages);
 			}
 
 			// Log detailed error information
@@ -166,7 +277,52 @@ async function callMetaAPI(
 			throw createDetailedError(response, endpoint, errorData);
 		}
 
-		return response.json();
+		const result = (await response.json()) as {
+			data?: unknown[] | unknown;
+			paging?: { next?: string; cursors?: { before?: string; after?: string } };
+		};
+
+		// Handle pagination if enabled and response has paging with array data
+		if (enablePagination && result.paging?.next && Array.isArray(result.data)) {
+			const allData: unknown[] = [...(result.data || [])];
+			let nextUrl: string | undefined = result.paging.next;
+			let pageCount = 1;
+
+			// Follow pagination until no more pages or safety limit reached (matching main codebase pattern)
+			while (nextUrl && pageCount < maxPages) {
+				await enforceRateLimit(); // Rate limit between pages
+				const pageResponse = await fetchPaginatedUrl(nextUrl);
+
+				if (Array.isArray(pageResponse.data)) {
+					allData.push(...pageResponse.data);
+					pageCount++;
+					console.log(`   Retrieved page ${pageCount}: ${pageResponse.data.length} records (total: ${allData.length})`);
+				} else {
+					// If response format changes, break to avoid errors
+					console.warn(`⚠️ Unexpected response format in pagination, stopping at page ${pageCount}`);
+					break;
+				}
+
+				nextUrl = pageResponse.paging?.next;
+			}
+
+			if (pageCount >= maxPages) {
+				console.warn(`⚠️ Reached pagination safety limit (${maxPages} pages). Total records: ${allData.length}`);
+			} else if (pageCount > 1) {
+				console.log(`✅ Completed pagination: ${allData.length} total records across ${pageCount} pages`);
+			}
+
+			// Return aggregated result in same format as single page
+			return {
+				data: allData,
+				paging: {
+					...result.paging,
+					next: undefined, // No more pages since we fetched all
+				},
+			};
+		}
+
+		return result;
 	} catch (error: unknown) {
 		// Handle abort (timeout) as retryable
 		if (error instanceof Error && error.name === 'AbortError') {
@@ -174,7 +330,7 @@ async function callMetaAPI(
 				const backoffDelay = Math.pow(2, retryCount) * 1000;
 				console.warn(`⚠️ Request timeout, retrying in ${backoffDelay}ms`);
 				await delay(backoffDelay);
-				return callMetaAPI(endpoint, params, method, retryCount + 1, env);
+				return callMetaAPI(endpoint, params, method, retryCount + 1, env, enablePagination, maxPages);
 			}
 			throw new Error(`Request timeout after ${CONFIG.maxRetries + 1} attempts: ${endpoint}`);
 		}

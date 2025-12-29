@@ -1,0 +1,513 @@
+{
+	"info": {
+		"name": "Meta Ads MCP Server",
+		"description": "Postman collection for testing Meta Ads MCP Server endpoints and tools",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "meta-ads-mcp"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8787",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "GET Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": ["{{base_url}}"],
+							"path": [""]
+						},
+						"description": "Check if the MCP server is running"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "MCP Protocol",
+			"item": [
+				{
+					"name": "Initialize",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"initialize\",\n  \"params\": {\n    \"protocolVersion\": \"2024-11-05\",\n    \"capabilities\": {},\n    \"clientInfo\": {\n      \"name\": \"postman\",\n      \"version\": \"1.0.0\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Initialize the MCP connection"
+					},
+					"response": []
+				},
+				{
+					"name": "Tools List",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"method\": \"tools/list\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get list of all available tools"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Account & Authentication",
+			"item": [
+				{
+					"name": "Get Ad Accounts",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_ad_accounts\",\n    \"arguments\": {}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get all ad accounts accessible by the user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Account Info",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_account_info\",\n    \"arguments\": {\n      \"account_id\": \"act_YOUR_ACCOUNT_ID\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get detailed information about a specific ad account. Replace act_YOUR_ACCOUNT_ID with your actual account ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Validate Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 5,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_validate_token\",\n    \"arguments\": {}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Validate current access token and get token information"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Campaigns",
+			"item": [
+				{
+					"name": "Get Campaigns",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 6,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_campaigns\",\n    \"arguments\": {\n      \"account_id\": \"act_YOUR_ACCOUNT_ID\",\n      \"limit\": 25\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get campaigns for an ad account. Replace act_YOUR_ACCOUNT_ID with your actual account ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Campaign Details",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 7,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_campaign_details\",\n    \"arguments\": {\n      \"campaign_id\": \"YOUR_CAMPAIGN_ID\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get detailed information about a specific campaign. Replace YOUR_CAMPAIGN_ID with your actual campaign ID."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Ad Sets",
+			"item": [
+				{
+					"name": "Get Ad Sets",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 8,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_adsets\",\n    \"arguments\": {\n      \"account_id\": \"act_YOUR_ACCOUNT_ID\",\n      \"limit\": 25\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get ad sets for an account. Replace act_YOUR_ACCOUNT_ID with your actual account ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Ad Set Details",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 9,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_adset_details\",\n    \"arguments\": {\n      \"adset_id\": \"YOUR_ADSET_ID\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get detailed information about a specific ad set. Replace YOUR_ADSET_ID with your actual ad set ID."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Ads",
+			"item": [
+				{
+					"name": "Get Ads",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 10,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_ads\",\n    \"arguments\": {\n      \"account_id\": \"act_YOUR_ACCOUNT_ID\",\n      \"limit\": 25\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get ads for an account. Replace act_YOUR_ACCOUNT_ID with your actual account ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Ad Details",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 11,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_ad_details\",\n    \"arguments\": {\n      \"ad_id\": \"YOUR_AD_ID\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get detailed information about a specific ad. Replace YOUR_AD_ID with your actual ad ID."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Creatives",
+			"item": [
+				{
+					"name": "Get Ad Creatives",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 12,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_ad_creatives\",\n    \"arguments\": {\n      \"ad_id\": \"YOUR_AD_ID\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get creative details for a specific ad. Replace YOUR_AD_ID with your actual ad ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Creative Details",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 13,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_creative_details\",\n    \"arguments\": {\n      \"creative_id\": \"YOUR_CREATIVE_ID\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get detailed information about a specific creative. Replace YOUR_CREATIVE_ID with your actual creative ID."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Insights",
+			"item": [
+				{
+					"name": "Get Account Insights",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 14,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_insights\",\n    \"arguments\": {\n      \"object_id\": \"act_YOUR_ACCOUNT_ID\",\n      \"level\": \"account\",\n      \"date_preset\": \"last_7d\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get account-level insights. Replace act_YOUR_ACCOUNT_ID with your actual account ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Campaign Insights",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 15,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_insights\",\n    \"arguments\": {\n      \"object_id\": \"YOUR_CAMPAIGN_ID\",\n      \"level\": \"campaign\",\n      \"date_preset\": \"last_7d\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get campaign-level insights. Replace YOUR_CAMPAIGN_ID with your actual campaign ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Ad Set Insights",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 16,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_insights\",\n    \"arguments\": {\n      \"object_id\": \"YOUR_ADSET_ID\",\n      \"level\": \"adset\",\n      \"date_preset\": \"last_7d\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get ad set-level insights. Replace YOUR_ADSET_ID with your actual ad set ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Ad Insights",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 17,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_insights\",\n    \"arguments\": {\n      \"object_id\": \"YOUR_AD_ID\",\n      \"level\": \"ad\",\n      \"date_preset\": \"last_7d\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get ad-level insights. Replace YOUR_AD_ID with your actual ad ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Insights with Time Range",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 18,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_get_insights\",\n    \"arguments\": {\n      \"object_id\": \"act_YOUR_ACCOUNT_ID\",\n      \"level\": \"account\",\n      \"time_range\": \"{\\\"since\\\":\\\"2024-01-01\\\",\\\"until\\\":\\\"2024-01-31\\\"}\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get insights with custom time range. Replace act_YOUR_ACCOUNT_ID with your actual account ID."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Diagnostics",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 19,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"mcp_meta_ads_health_check\",\n    \"arguments\": {}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Verify MCP server and Meta API connection status"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
