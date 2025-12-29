@@ -1,4 +1,4 @@
-/// <reference types="./worker-configuration" />
+/// <reference types="../worker-configuration" />
 
 /**
  * ============================================================================
@@ -147,7 +147,9 @@ async function callMetaAPI(
 		clearTimeout(timeoutId);
 
 		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+			const errorData = (await response.json().catch(() => ({ error: { message: 'Unknown error' } }))) as {
+				error?: { message?: string; code?: number; type?: string };
+			};
 
 			// Check if this is a retryable error
 			if (isRetryableError(response) && retryCount < CONFIG.maxRetries) {
