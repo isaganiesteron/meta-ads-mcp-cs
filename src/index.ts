@@ -712,6 +712,86 @@ API Version: ${metaApi.api_version || 'N/A'}
 ${metaApi.error ? `Error: ${metaApi.error}\n` : ''}`;
 }
 
+// Format error messages in a human-readable way
+function formatError(error: unknown, context?: string): string {
+	let errorMessage = 'An unexpected error occurred';
+	let errorDetails = '';
+
+	if (error instanceof Error) {
+		errorMessage = error.message;
+
+		// Parse Meta API errors for better formatting
+		if (error.message.includes('Meta API error')) {
+			// Extract error details from format: "Meta API error (CODE): MESSAGE | Type: TYPE | Endpoint: ENDPOINT"
+			const match = error.message.match(/Meta API error \((\d+)\): (.+?) \| Type: (.+?) \| Endpoint: (.+)/);
+			if (match) {
+				const [, code, message, type, endpoint] = match;
+				return `❌ Meta Ads API Error
+
+Error Code: ${code}
+Error Type: ${type}
+Error Message: ${message}
+Endpoint: ${endpoint}
+
+${context ? `Context: ${context}\n` : ''}Please check:
+- Your access token is valid and has the required permissions
+- The account ID or resource ID is correct
+- The API endpoint and parameters are valid`;
+			}
+		}
+
+		// Handle timeout errors
+		if (error.message.includes('timeout')) {
+			return `⏱️ Request Timeout
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}The request took too long to complete. This could be due to:
+- Network connectivity issues
+- Meta API being slow or unavailable
+- Large data sets taking longer to process
+
+Please try again later.`;
+		}
+
+		// Handle configuration errors
+		if (error.message.includes('META_ACCESS_TOKEN')) {
+			return `🔑 Configuration Error
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}Please ensure:
+- META_ACCESS_TOKEN is set in your environment variables
+- The token is valid and not expired
+- The token has the required permissions for Meta Ads API`;
+		}
+
+		// Handle pagination errors
+		if (error.message.includes('pagination') || error.message.includes('Paginated request')) {
+			return `📄 Pagination Error
+
+${error.message}
+
+${context ? `Context: ${context}\n` : ''}There was an issue fetching paginated data. This could be due to:
+- Network issues during pagination
+- API rate limiting
+- Invalid pagination tokens
+
+Please try again or reduce the number of pages requested.`;
+		}
+	}
+
+	// Generic error formatting
+	return `❌ Error
+
+${errorMessage}
+
+${context ? `Context: ${context}\n` : ''}If this error persists, please check:
+- Your network connection
+- Meta API status
+- Your configuration settings`;
+}
+
 // Main formatter that routes to appropriate formatter
 function formatResponse(data: any, toolName: string): string {
 	// Determine which formatter to use based on tool name
@@ -1463,11 +1543,12 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 			message = JSON.parse(body);
 		} catch (parseError) {
 			console.error('JSON parse error:', parseError);
+			const formattedError = formatError(new Error('Invalid JSON format in request body'), 'Request parsing');
 			const errorResponse = {
 				jsonrpc: '2.0',
 				error: {
 					code: -32700,
-					message: 'Parse error',
+					message: formattedError,
 				},
 			};
 			return new Response(JSON.stringify(errorResponse), {
@@ -1528,12 +1609,14 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 						result,
 					};
 				} catch (toolError: unknown) {
+					// Format error in human-readable way
+					const formattedError = formatError(toolError, `Tool: ${name}`);
 					response = {
 						jsonrpc: '2.0',
 						id: message.id,
 						error: {
 							code: -32603,
-							message: toolError instanceof Error ? toolError.message : 'Tool execution failed',
+							message: formattedError,
 						},
 					};
 				}
@@ -1543,7 +1626,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 					id: message.id,
 					error: {
 						code: -32601,
-						message: `Unknown tool: ${name}`,
+						message: formatError(new Error(`Unknown tool: ${name}`), 'Tool lookup'),
 					},
 				};
 			}
@@ -1561,7 +1644,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 				id: message.id || null,
 				error: {
 					code: -32601,
-					message: `Method not found: ${message.method}`,
+					message: formatError(new Error(`Method not found: ${message.method}`), 'Method lookup'),
 				},
 			};
 		}
@@ -1594,11 +1677,12 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 		});
 	} catch (error: unknown) {
 		console.error('Message handling error:', error);
+		const formattedError = formatError(error, 'Message handling');
 		const errorResponse = {
 			jsonrpc: '2.0',
 			error: {
 				code: -32603,
-				message: error instanceof Error ? error.message : 'Internal error',
+				message: formattedError,
 			},
 		};
 		return new Response(JSON.stringify(errorResponse), {
