@@ -371,10 +371,14 @@ chmod +x migrate-env.sh
    ```
 
 2. Edit `.dev.vars` and add your Meta Ads credentials from your `.env` file:
+
    ```
    META_ACCESS_TOKEN=your_actual_meta_access_token_here
    META_API_VERSION=v19.0
+   API_KEY=your_api_key_here
    ```
+
+   **Note:** `API_KEY` is optional. If set, all POST requests must include the `X-API-Key` header with the matching value. If not set, API key validation is skipped.
 
 **Note:** Wrangler uses `.dev.vars` for local development (not `.env`). The `.dev.vars` file is gitignored for security.
 
@@ -388,7 +392,16 @@ wrangler secret put META_ACCESS_TOKEN
 
 # Optional: Set API version (or use default v19.0)
 wrangler secret put META_API_VERSION
+
+# Optional: Set API key for POST request authentication
+wrangler secret put API_KEY
 ```
+
+**API Key Authentication:**
+
+- If `API_KEY` is set, all POST requests must include the `X-API-Key` header with the matching value
+- If `API_KEY` is not set, API key validation is skipped (all POST requests are allowed)
+- This provides an additional security layer for your MCP server endpoints
 
 📖 **See [SETUP.md](SETUP.md) for detailed setup instructions and troubleshooting.**
 
@@ -492,7 +505,9 @@ The `mcp_meta_ads_get_api_limits` tool can help you monitor your current usage.
 - `GET /` - Health check endpoint
 - `GET /sse` - SSE endpoint for establishing connection
 - `POST /sse` - Direct HTTP endpoint (for clients that don't use SSE)
+  - **Requires**: `X-API-Key` header (if `API_KEY` environment variable is set)
 - `POST /sse/message?sessionId={id}` - Message endpoint for active SSE sessions
+  - **Requires**: `X-API-Key` header (if `API_KEY` environment variable is set)
 
 ## Tool Development Guide
 
@@ -656,10 +671,14 @@ wrangler secret put META_ACCESS_TOKEN
 # Meta API Version (optional, defaults to latest)
 wrangler secret put META_API_VERSION
 
-# Or in wrangler.jsonc for non-sensitive vars
+# API Key for POST request authentication (optional)
+wrangler secret put API_KEY
+
+# Or in wrangler.jsonc (for local development or non-sensitive vars)
 {
 	"vars": {
 		"META_API_VERSION": "v19.0",
+		"API_KEY": "your_api_key_here",
 		"ENVIRONMENT": "production"
 	}
 }
@@ -671,9 +690,18 @@ Create a `.dev.vars` file in the project root (copy from `.dev.vars.example`):
 ```
 META_ACCESS_TOKEN=your_access_token_here
 META_API_VERSION=v19.0
+API_KEY=your_api_key_here
 ```
 
 **Note:** If you have a `.env` file, copy your `META_ACCESS_TOKEN` value to `.dev.vars`. Wrangler uses `.dev.vars` for local development, not `.env`.
+
+**API Key Authentication:**
+
+- The `API_KEY` environment variable is optional
+- If set, all POST requests must include the `X-API-Key` header with the matching value
+- If not set, API key validation is skipped (all POST requests are allowed)
+- This provides an additional security layer for your MCP server endpoints
+- Clients making POST requests should include: `X-API-Key: your_api_key_here`
 
 Access in your code:
 

@@ -37,6 +37,7 @@ const CONFIG = {
 interface Env {
 	META_ACCESS_TOKEN?: string;
 	META_API_VERSION?: string;
+	API_KEY?: string;
 }
 
 interface Tool {
@@ -1573,6 +1574,30 @@ interface Session {
 // Store active sessions
 const sessions = new Map<string, Session>();
 
+// Validate API key from X-API-Key header
+function validateApiKey(request: Request, env: Env): { valid: boolean } {
+	// Only validate for POST requests
+	if (request.method !== 'POST') {
+		return { valid: true };
+	}
+
+	// Get API key from header
+	const apiKey = request.headers.get('X-API-Key');
+	const expectedApiKey = env.API_KEY;
+
+	// If API_KEY is not configured, skip validation
+	if (!expectedApiKey) {
+		return { valid: true };
+	}
+
+	// If API key is required but not provided or doesn't match
+	if (!apiKey || apiKey !== expectedApiKey) {
+		return { valid: false };
+	}
+
+	return { valid: true };
+}
+
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
@@ -1581,7 +1606,7 @@ export default {
 		const corsHeaders = {
 			'Access-Control-Allow-Origin': '*', // Change to specific domain if needed
 			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-			'Access-Control-Allow-Headers': 'Content-Type, Accept',
+			'Access-Control-Allow-Headers': 'Content-Type, Accept, X-API-Key',
 		};
 
 		console.log(`${request.method} ${url.pathname}`);
@@ -1656,6 +1681,24 @@ export default {
 
 		// Handle POST to /sse (some clients do this for direct HTTP)
 		if (url.pathname === '/sse' && request.method === 'POST') {
+			// Validate API key for POST requests
+			const apiKeyValidation = validateApiKey(request, env);
+			if (!apiKeyValidation.valid) {
+				return new Response(
+					JSON.stringify({
+						error: 'Unauthorized',
+						message: 'Invalid or missing API key. Please provide a valid X-API-Key header.',
+					}),
+					{
+						status: 401,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+
 			console.log('Received POST to /sse - redirecting to message handler');
 			// Treat this as a direct message without session
 			return handleMessage(request, corsHeaders, null, env);
@@ -1663,6 +1706,24 @@ export default {
 
 		// Messages endpoint with session
 		if (url.pathname === '/sse/message' && request.method === 'POST') {
+			// Validate API key for POST requests
+			const apiKeyValidation = validateApiKey(request, env);
+			if (!apiKeyValidation.valid) {
+				return new Response(
+					JSON.stringify({
+						error: 'Unauthorized',
+						message: 'Invalid or missing API key. Please provide a valid X-API-Key header.',
+					}),
+					{
+						status: 401,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+
 			const sessionId = url.searchParams.get('sessionId');
 			console.log('Received POST to /sse/message with sessionId:', sessionId);
 

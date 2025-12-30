@@ -8,6 +8,7 @@ declare namespace Cloudflare {
 	interface Env {
 		META_ACCESS_TOKEN?: string;
 		META_API_VERSION?: string;
+		API_KEY?: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

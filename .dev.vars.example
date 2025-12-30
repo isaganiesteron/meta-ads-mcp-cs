@@ -5,3 +5,7 @@
 META_ACCESS_TOKEN=your_meta_access_token_here
 META_API_VERSION=v19.0
 
+# API Key for POST request authentication (required for all POST requests)
+# If not set, API key validation will be skipped
+API_KEY=your_api_key_here
+
