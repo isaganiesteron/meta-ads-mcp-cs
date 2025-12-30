@@ -2,6 +2,8 @@
 
 A comprehensive Model Context Protocol (MCP) server for Meta (Facebook) Ads API, providing read-only access to ad accounts, campaigns, ad sets, ads, creatives, targeting data, and analytics. Built on Cloudflare Workers with SSE (Server-Sent Events) support for real-time communication with MCP clients.
 
+> **Note**: This project was developed by [ContractorScale](https://contractorscale.com). The "cs" suffix in the project name refers to ContractorScale.
+
 ## Features
 
 - **39 Read-Only Tools**: Complete coverage of Meta Ads API for account management, campaign analysis, creative insights, targeting research, and performance analytics
